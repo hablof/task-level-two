@@ -1,4 +1,4 @@
-package main
+package mysort
 
 import (
 	"cmp"
@@ -66,32 +66,49 @@ func (e ErrLineDuplicate) Error() string {
 	return fmt.Sprintf("line %d: \"%s\" is duplicate", e.numberLine, e.line)
 }
 
-type sortType uint8
+type SortType uint8
 
 const (
-	_ sortType = iota
-	byStrings
-	byMonth
-	byNumbers
-	byNumbersWithSuffix
+	_ SortType = iota
+	Alphabetical
+	ByMonth
+	Numeric
+	HumanNumberic
 )
 
-type sortOptions struct {
-	sortType     sortType
-	reverseOrder bool
-	unique       bool
-	checkSorted  bool
-	byColumn     bool
-	columnNumber int
-	delim        string
+var sortTypeNames = []string{
+	"unknown",
+	"alphabetical",
+	"by month",
+	"numeric",
+	"human numeric",
 }
 
-func SortLinesInString(s string, opt sortOptions) (string, error) {
+func (s SortType) String() string {
+	return sortTypeNames[s]
+}
+
+type SortOptions struct {
+	SortType             SortType
+	ReverseOrder         bool
+	Unique               bool
+	IgnoreTrailingSpaces bool
+	CheckSorted          bool
+	ByColumn             bool
+	ColumnNumber         int
+	Delim                string
+}
+
+const (
+	isSortedMsg = "is sorted!"
+)
+
+func SortLinesInString(s string, opt SortOptions) (string, error) {
 	originalLines := strings.Split(s, "\n")
 
 	// Оставляяем только уникальные строки
 	// и, если надо, проверяем нет ли дубликатов
-	if opt.unique {
+	if opt.Unique {
 		linesMap := make(map[string]struct{})
 		for _, line := range originalLines {
 			linesMap[line] = struct{}{}
@@ -101,7 +118,7 @@ func SortLinesInString(s string, opt sortOptions) (string, error) {
 			if _, ok := linesMap[line]; ok {
 				newLines = append(newLines, line)
 				delete(linesMap, line)
-			} else if opt.checkSorted {
+			} else if opt.CheckSorted {
 				return "", ErrLineDuplicate{
 					numberLine: i,
 					line:       line,
@@ -118,19 +135,19 @@ func SortLinesInString(s string, opt sortOptions) (string, error) {
 	// в дальнейшем мы получим нужные велечины из строк.
 	var stringValuesToSort []string
 
-	if opt.byColumn {
+	if opt.ByColumn {
 		// если нужно сортировать по столбцу
 		sortColumns := make([]string, 0, len(originalLines))
 		for i, line := range originalLines {
-			columns := strings.Split(line, opt.delim)
-			if len(columns) <= opt.columnNumber {
+			columns := strings.Split(line, opt.Delim)
+			if len(columns) <= opt.ColumnNumber {
 				return "", ErrNoColumn{
-					column: opt.columnNumber,
+					column: opt.ColumnNumber,
 					line:   i,
 				}
 			}
 
-			sortColumns = append(sortColumns, columns[opt.columnNumber])
+			sortColumns = append(sortColumns, columns[opt.ColumnNumber])
 		}
 
 		stringValuesToSort = sortColumns
@@ -139,40 +156,62 @@ func SortLinesInString(s string, opt sortOptions) (string, error) {
 		stringValuesToSort = slices.Clone(originalLines)
 	}
 
-	//
-	switch opt.sortType {
-	case byStrings:
-		if opt.checkSorted {
-			return checkSorted(stringValuesToSort, opt.reverseOrder)
+	// делаем сортировку по выбранному типу
+	// к сожалению, не придумал, как отрефакторить в более DRY-код
+	switch opt.SortType {
+	case Alphabetical:
+		if opt.IgnoreTrailingSpaces {
+			trimmedStringsToSort := make([]string, 0, len(stringValuesToSort))
+			for _, str := range stringValuesToSort {
+				trimmedStringsToSort = append(trimmedStringsToSort, strings.TrimRight(str, " "))
+			}
+			stringValuesToSort = trimmedStringsToSort
 		}
+
+		if opt.CheckSorted {
+			return checkSorted(stringValuesToSort, opt.ReverseOrder)
+		}
+
 		sortSlicePair(stringValuesToSort, originalLines)
 
-	case byMonth:
+	case ByMonth:
 		months, err := makeReferenceSlice(parseMonth, stringValuesToSort)
 		if err != nil {
 			return "", err
 		}
 
+		if opt.CheckSorted {
+			return checkSorted(months, opt.ReverseOrder)
+		}
+
 		sortSlicePair(months, originalLines)
 
-	case byNumbers:
+	case Numeric:
 		numbers, err := makeReferenceSlice(strconv.Atoi, stringValuesToSort)
 		if err != nil {
 			return "", err
 		}
 
+		if opt.CheckSorted {
+			return checkSorted(numbers, opt.ReverseOrder)
+		}
+
 		sortSlicePair(numbers, originalLines)
 
-	case byNumbersWithSuffix:
+	case HumanNumberic:
 		numbers, err := makeReferenceSlice(parseNumberWithSuffix, stringValuesToSort)
 		if err != nil {
 			return "", err
 		}
 
+		if opt.CheckSorted {
+			return checkSorted(numbers, opt.ReverseOrder)
+		}
+
 		sortSlicePair(numbers, originalLines)
 	}
 
-	if opt.reverseOrder {
+	if opt.ReverseOrder {
 		slices.Reverse(originalLines)
 	}
 
@@ -189,7 +228,7 @@ func checkSorted[T cmp.Ordered](linesToSort []T, reverseOrder bool) (string, err
 			}
 		}
 
-		return "is sorted!", nil
+		return isSortedMsg, nil
 	}
 
 	for i := 1; i < len(linesToSort); i++ {
@@ -200,19 +239,34 @@ func checkSorted[T cmp.Ordered](linesToSort []T, reverseOrder bool) (string, err
 		}
 	}
 
-	return "is sorted!", nil
+	return isSortedMsg, nil
 
 }
 
-func sortSlicePair[R, M cmp.Ordered](reference []R, mainSlice []M) {
-	sort.Slice(reference, func(i, j int) bool {
-		cond := reference[i] < reference[j]
-		if cond {
-			mainSlice[i], mainSlice[j] = mainSlice[j], mainSlice[i]
-		}
-		return cond
+func sortSlicePair[R cmp.Ordered, M any](reference []R, mainSlice []M) {
+
+	type tempSort struct {
+		r R
+		m M
+	}
+	ts := make([]tempSort, 0, len(reference))
+
+	for i, r := range reference {
+		ts = append(ts, tempSort{
+			r: r,
+			m: mainSlice[i],
+		})
+	}
+
+	sort.Slice(ts, func(i, j int) bool {
+		return ts[i].r < ts[j].r
 	})
+
+	for i, unit := range ts {
+		mainSlice[i] = unit.m
+	}
 }
+
 func makeReferenceSlice[T any](convFunc func(s string) (T, error), linesToSort []string) ([]T, error) {
 	referenceSlice := make([]T, 0, len(linesToSort))
 	for _, numStr := range linesToSort {
