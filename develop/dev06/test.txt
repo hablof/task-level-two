@@ -1,4 +1,4 @@
-first|words|of|file
-nextwords|kek|world
-and|another|in|.txt
-f1|tv
+first,words,of,file
+nextwords,kek,world
+and,another,in,.txt
+f1,tv
