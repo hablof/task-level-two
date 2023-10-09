@@ -85,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("connected")
+	log.Println("connected")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -111,7 +111,7 @@ func main() {
 	stdInCh := make(chan []byte)
 	go func() {
 		defer cancel()
-		defer fmt.Println("reader from stdin exited")
+		defer log.Println("reader from stdin exited")
 
 		reader := bufio.NewReader(os.Stdin)
 
@@ -137,7 +137,7 @@ func main() {
 
 	go func() {
 		defer cancel()
-		defer fmt.Println("writer to conn exited")
+		defer log.Println("writer to conn exited")
 		for {
 			select {
 			case s := <-stdInCh:
@@ -154,6 +154,7 @@ func main() {
 	terminationChannel := make(chan os.Signal, 1)
 
 	// не знаю как на Windows обработать Ctrl+D, дай бог этот код работает на Linux/MacOS
+	// при нажатии Ctrl+D в терминале просто появляется "^D"
 	signal.Notify(terminationChannel, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
@@ -163,7 +164,10 @@ func main() {
 	conn.Close()
 	cancel()
 
-	time.Sleep(100 * time.Millisecond)
+	// не знаю почему, без Sleep терминал не хотел адекватно возвращать управление
+	// приходилось нажимать Enter
+	// использую git bash под windows
+	time.Sleep(10 * time.Millisecond)
 	// fmt.Println("Session ended. To exit send any message...")
 	// os.Stdin.Close()
 }
