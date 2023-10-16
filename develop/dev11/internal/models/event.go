@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	TSLayout = "2006-01-02 15:04"
+	TSLayout      = "2006-01-02 15:04"
+	TSLayoutShort = "2006-01-02"
 )
 
 var (
@@ -19,6 +20,19 @@ type TS struct {
 	TS time.Time
 }
 
+func ParseTimestamp(str string) (time.Time, error) {
+	t, err := time.Parse(TSLayout, str)
+	if err != nil {
+		tt, err := time.Parse(TSLayoutShort, str)
+		if err != nil {
+			return time.Time{}, err
+		}
+		t = tt
+	}
+
+	return t, nil
+}
+
 func (ts *TS) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `\"`)
 	if s == "null" {
@@ -26,7 +40,7 @@ func (ts *TS) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 
-	t, err := time.Parse(TSLayout, s)
+	t, err := ParseTimestamp(s)
 	if err != nil {
 		return err
 	}
@@ -41,6 +55,31 @@ type Event struct {
 	UserID uint64 `json:"user_id,omitempty"`
 	Title  string `json:"title,omitempty"`
 	Notes  string `json:"notes,omitempty"`
+}
+
+func (e Event) MarshalJSON() ([]byte, error) {
+
+	s := struct {
+		ID     uint64 `json:"id,omitempty"`
+		Date   string `json:"date,omitempty"`
+		UserID uint64 `json:"user_id,omitempty"`
+		Title  string `json:"title,omitempty"`
+		Notes  string `json:"notes,omitempty"`
+	}{
+		ID:     e.ID,
+		UserID: e.UserID,
+		Title:  e.Title,
+		Notes:  e.Notes,
+	}
+
+	// omit hh:mm if it's 00:00
+	if e.Date.TS.Hour() == 0 && e.Date.TS.Minute() == 0 {
+		s.Date = e.Date.TS.Format(TSLayoutShort)
+	} else {
+		s.Date = e.Date.TS.Format(TSLayout)
+	}
+
+	return json.Marshal(s)
 }
 
 type UpdateEvent struct {

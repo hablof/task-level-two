@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"log"
 	"time"
@@ -9,10 +10,10 @@ import (
 )
 
 type Repository interface {
-	CreateEvent(event models.Event) (id int, err error)
-	UpdateEvent(updateEvent models.UpdateEvent) error
-	DeleteEvent(id uint64) error
-	EventsInInterval(userID uint64, begin time.Time, end time.Time) ([]models.Event, error)
+	CreateEvent(ctx context.Context, event models.Event) (id int64, err error)
+	UpdateEvent(ctx context.Context, updateEvent models.UpdateEvent) error
+	DeleteEvent(ctx context.Context, id uint64) error
+	EventsInInterval(ctx context.Context, userID uint64, begin time.Time, end time.Time) ([]models.Event, error)
 }
 
 // returns errors
@@ -38,8 +39,23 @@ var (
 	ErrNotFound = errors.New("not found")
 )
 
+type Interval uint8
+
+const (
+	_ Interval = iota
+	Day
+	Week
+	Month
+)
+
 type Service struct {
 	r Repository
+}
+
+func NewService(r Repository) Service {
+	return Service{
+		r: r,
+	}
 }
 
 func (s Service) validateEventToCreate(event models.Event) error {
@@ -71,12 +87,12 @@ func (s Service) validateEventToUpdate(eventUpdate models.UpdateEvent) error {
 	return nil
 }
 
-func (s Service) CreateEvent(event models.Event) (int, error) {
+func (s Service) CreateEvent(ctx context.Context, event models.Event) (int64, error) {
 	if err := s.validateEventToCreate(event); err != nil {
 		return 0, err
 	}
 
-	id, err := s.r.CreateEvent(event)
+	id, err := s.r.CreateEvent(ctx, event)
 	switch {
 	case err != nil:
 		log.Println(err)
@@ -86,12 +102,12 @@ func (s Service) CreateEvent(event models.Event) (int, error) {
 	return id, nil
 }
 
-func (s Service) UpdateEvent(eventUpdate models.UpdateEvent) error {
+func (s Service) UpdateEvent(ctx context.Context, eventUpdate models.UpdateEvent) error {
 	if err := s.validateEventToUpdate(eventUpdate); err != nil {
 		return err
 	}
 
-	switch err := s.r.UpdateEvent(eventUpdate); {
+	switch err := s.r.UpdateEvent(ctx, eventUpdate); {
 	case errors.Is(err, ErrNotFound):
 		return ErrNotFound
 
@@ -103,8 +119,8 @@ func (s Service) UpdateEvent(eventUpdate models.UpdateEvent) error {
 	return nil
 }
 
-func (s Service) DeleteEvent(id uint64) error {
-	switch err := s.r.DeleteEvent(id); {
+func (s Service) DeleteEvent(ctx context.Context, id uint64) error {
+	switch err := s.r.DeleteEvent(ctx, id); {
 	case errors.Is(err, ErrNotFound):
 		return ErrNotFound
 
@@ -116,23 +132,24 @@ func (s Service) DeleteEvent(id uint64) error {
 	return nil
 }
 
-func (s Service) EventsForDay(userID uint64, beginDate time.Time) ([]models.Event, error) {
-	endDate := beginDate.AddDate(0, 0, 1)
-	return s.eventsForPerioD(userID, beginDate, endDate)
-}
+func (s Service) EventsForInterval(ctx context.Context, userID uint64, beginDate time.Time, interval Interval) ([]models.Event, error) {
+	var endDate time.Time
 
-func (s Service) EventsForWeek(userID uint64, beginDate time.Time) ([]models.Event, error) {
-	endDate := beginDate.AddDate(0, 0, 7)
-	return s.eventsForPerioD(userID, beginDate, endDate)
-}
+	switch interval {
+	case Day:
+		endDate = beginDate.AddDate(0, 0, 1)
 
-func (s Service) EventsForMonth(userID uint64, beginDate time.Time) ([]models.Event, error) {
-	endDate := beginDate.AddDate(0, 1, 0)
-	return s.eventsForPerioD(userID, beginDate, endDate)
-}
+	case Week:
+		endDate = beginDate.AddDate(0, 0, 7)
 
-func (s Service) eventsForPerioD(userID uint64, beginDate time.Time, endDate time.Time) ([]models.Event, error) {
-	events, err := s.r.EventsInInterval(userID, beginDate, endDate)
+	case Month:
+		endDate = beginDate.AddDate(0, 1, 0)
+
+	default:
+		return nil, errors.New("unknown interval")
+	}
+
+	events, err := s.r.EventsInInterval(ctx, userID, beginDate, endDate)
 	switch {
 	case err != nil:
 		log.Println(err)

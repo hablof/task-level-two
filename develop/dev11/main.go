@@ -1,5 +1,19 @@
 package main
 
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/hablof/task-level-two/develop/dev11/internal/controller"
+	"github.com/hablof/task-level-two/develop/dev11/internal/repository"
+	"github.com/hablof/task-level-two/develop/dev11/internal/service"
+)
+
 /*
 === HTTP server ===
 
@@ -23,5 +37,45 @@ package main
 */
 
 func main() {
+	log.Println("starting service")
+	r, err := repository.NewRepository()
+	if err != nil {
+		log.Printf("failed to create repository: %v\n", err)
+		os.Exit(1)
+	}
 
+	s := service.NewService(r)
+
+	c := controller.NewController(s)
+
+	server := http.Server{
+		Addr:              ":8080",
+		Handler:           &c,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       15 * time.Second,
+	}
+
+	ctx, cf := context.WithCancel(context.Background())
+	defer cf()
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Println(err)
+		}
+	}()
+
+	interruptChannel := make(chan os.Signal, 1)
+	signal.Notify(interruptChannel, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case <-ctx.Done():
+	case <-interruptChannel:
+	}
+
+	ctx2, cf2 := context.WithTimeout(ctx, 5*time.Second)
+	defer cf2()
+
+	server.Shutdown(ctx2)
 }
