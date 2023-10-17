@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -74,12 +75,15 @@ func (c *Controller) createEvent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err)
 
-		switch err {
-		case service.ErrFailedToCreate:
-			c.sendErr(w, http.StatusInternalServerError, err.Error())
+		switch {
+		case errors.Is(err, service.ErrUnableToSetID) ||
+			errors.Is(err, service.ErrMustHaveUserID) ||
+			errors.Is(err, service.ErrEmptyTitle):
+
+			c.sendErr(w, http.StatusServiceUnavailable, err.Error())
 
 		default:
-			c.sendErr(w, http.StatusServiceUnavailable, err.Error())
+			c.sendErr(w, http.StatusInternalServerError, err.Error())
 		}
 
 		return
@@ -95,6 +99,7 @@ func (c *Controller) createEvent(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{"result": result}); err != nil {
 		log.Printf("failed to encode result: %v", err)
 	}
+	log.Println("success")
 }
 
 func (c *Controller) updateEvent(w http.ResponseWriter, r *http.Request) {
@@ -158,14 +163,14 @@ func (c *Controller) updateEvent(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 
 		switch err {
-		case service.ErrFailedToUpdate:
-			c.sendErr(w, http.StatusInternalServerError, err.Error())
+		case service.ErrNothingToUpdate:
+			c.sendErr(w, http.StatusServiceUnavailable, err.Error())
 
 		case service.ErrNotFound:
 			c.sendErr(w, http.StatusNotFound, err.Error())
 
 		default:
-			c.sendErr(w, http.StatusServiceUnavailable, err.Error())
+			c.sendErr(w, http.StatusInternalServerError, err.Error())
 		}
 
 		return
@@ -175,6 +180,7 @@ func (c *Controller) updateEvent(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"result": "updated"}); err != nil {
 		log.Printf("failed to encode result: %v", err)
 	}
+	log.Println("success")
 }
 
 func (c *Controller) deleteEvent(w http.ResponseWriter, r *http.Request) {
@@ -198,14 +204,11 @@ func (c *Controller) deleteEvent(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 
 		switch err {
-		case service.ErrFailedToDelete:
-			c.sendErr(w, http.StatusInternalServerError, err.Error())
-
 		case service.ErrNotFound:
 			c.sendErr(w, http.StatusNotFound, err.Error())
 
 		default:
-			c.sendErr(w, http.StatusServiceUnavailable, err.Error())
+			c.sendErr(w, http.StatusInternalServerError, err.Error())
 		}
 
 		return
@@ -215,6 +218,7 @@ func (c *Controller) deleteEvent(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"result": "deleted"}); err != nil {
 		log.Printf("failed to encode result: %v", err)
 	}
+	log.Println("success")
 }
 
 func (c *Controller) eventsForInterval(w http.ResponseWriter, r *http.Request) {
@@ -257,14 +261,7 @@ func (c *Controller) eventsForInterval(w http.ResponseWriter, r *http.Request) {
 	events, err := c.s.EventsForInterval(r.Context(), userID, timeStamp, interval)
 	if err != nil {
 		log.Println(err)
-
-		switch err {
-		case service.ErrFailedToFetch:
-			c.sendErr(w, http.StatusInternalServerError, err.Error())
-
-		default:
-			c.sendErr(w, http.StatusServiceUnavailable, err.Error())
-		}
+		c.sendErr(w, http.StatusInternalServerError, err.Error())
 
 		return
 	}
@@ -272,5 +269,7 @@ func (c *Controller) eventsForInterval(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 	if err := json.NewEncoder(w).Encode(map[string][]models.Event{"result": events}); err != nil {
 		log.Printf("failed to encode result: %v", err)
+		return
 	}
+	log.Println("success")
 }

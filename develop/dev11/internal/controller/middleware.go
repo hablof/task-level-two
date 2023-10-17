@@ -7,7 +7,8 @@ import (
 
 func (c *Controller) logging(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("request: %s %s %s", r.Host, r.Method, r.URL.String())
+		r.ParseForm()
+		log.Printf("request: %s %-4s %-16s %s", r.Host, r.Method, r.URL.Path, r.Form.Encode())
 		f(w, r)
 	}
 }
