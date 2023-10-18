@@ -8,6 +8,10 @@ import "fmt"
 	https://en.wikipedia.org/wiki/Chain-of-responsibility_pattern
 */
 
+/*
+	паттерн позволяет ввести уровни ответственности в систему
+*/
+
 type eventLevel uint8
 
 const (
@@ -59,7 +63,6 @@ func (e emailNotifier) Log(mgs string) {
 }
 
 // конкретная реализация логгера
-
 type ironLadyNightcall struct {
 	phones []string
 }

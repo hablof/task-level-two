@@ -8,6 +8,9 @@ import "fmt"
 	https://en.wikipedia.org/wiki/Strategy_pattern
 */
 
+/*
+	Паттерн позволяет использовать различные бизнес-правила или алгоритмы в зависимости от контекста
+*/
 type Strategy interface {
 	Execute(a int, b int) int
 }

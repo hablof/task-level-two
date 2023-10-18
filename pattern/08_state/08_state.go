@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 )
@@ -13,24 +12,34 @@ import (
 
 	https://en.wikipedia.org/wiki/State_pattern
 */
+
+/*
+	паттерн разделяет поведение объекта в разных состояниях на различные классы
+	Плюсы:
+		1) инкапсуляция состояния
+	Минусы:
+		2) нужен мета-объект управляющий изменением состояний
+*/
+
 const threshold_CV = 70
 
-var ErrOverheat = errors.New("charger overheated")
-
+// вспомогательный объект
 type Battery struct {
 	chargeLevel int
 }
 
-type Charger interface {
-	Charge(b *Battery) Charger
+// интерфейс который должны выполнять все состояния
+type charger interface {
+	charge(b *Battery) charger
 }
 
+// зарядник, меняющий режимы своей работы
 type ChargerContext struct {
-	state Charger
+	state charger
 }
 
 func (c *ChargerContext) Charge(b *Battery) {
-	if newState := c.state.Charge(b); newState != nil {
+	if newState := c.state.charge(b); newState != nil {
 		c.state = newState
 	}
 }
@@ -43,9 +52,10 @@ func (c *ChargerContext) IsCharged(b *Battery) bool {
 	return false
 }
 
+// состояние зарядки постоянным током
 type CCmode struct{}
 
-func (cc CCmode) Charge(b *Battery) Charger {
+func (cc CCmode) charge(b *Battery) charger {
 	if b.chargeLevel > threshold_CV {
 		return CVmode{}
 	}
@@ -60,9 +70,10 @@ func (cc CCmode) Charge(b *Battery) Charger {
 	return nil
 }
 
+// состояние зарядки постоянным напряжением
 type CVmode struct{}
 
-func (cv CVmode) Charge(b *Battery) Charger {
+func (cv CVmode) charge(b *Battery) charger {
 	if b.chargeLevel <= threshold_CV {
 		return CCmode{}
 	}
@@ -83,11 +94,12 @@ func (cv CVmode) Charge(b *Battery) Charger {
 	return nil
 }
 
+// защитное состояние
 type OHmode struct {
 	coolingStage int
 }
 
-func (oh *OHmode) Charge(b *Battery) Charger {
+func (oh *OHmode) charge(b *Battery) charger {
 	if oh.coolingStage > 2 {
 		return CCmode{}
 	}

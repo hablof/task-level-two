@@ -6,6 +6,13 @@ package pattern
 	https://en.wikipedia.org/wiki/Builder_pattern
 */
 
+/*
+	Паттерн позволяет создавать объекты пошагово и ветвить задаваемые параметры в зависимости от внешних условий
+
+	Пример использования на практике: для динамического посторения SQL-запростов я использовал библиотеку https://github.com/Masterminds/squirrel
+	с ней очень легко подготовить запрос для множественного INSERT'а, например
+*/
+
 type enum uint8
 
 const (
@@ -14,6 +21,7 @@ const (
 	secondOption
 )
 
+// сложный объект
 type product struct {
 	strField string
 	params   []string
@@ -21,6 +29,7 @@ type product struct {
 	oneOf    enum
 }
 
+// строитель
 type builder struct {
 	product product
 }
@@ -50,6 +59,7 @@ func (b *builder) setEnum(e enum) *builder {
 	return b
 }
 
+// возвращает объект
 func (b *builder) result() product {
 	return b.product
 }

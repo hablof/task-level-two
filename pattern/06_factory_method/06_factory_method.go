@@ -8,6 +8,10 @@ import "errors"
 	https://en.wikipedia.org/wiki/Factory_method_pattern
 */
 
+/*
+	позволяет переиспользовать код создания сложного объекта
+*/
+
 type seat struct {
 	hasBack      bool
 	hasArmrests  bool
